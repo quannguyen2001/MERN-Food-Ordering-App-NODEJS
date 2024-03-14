@@ -7,6 +7,16 @@ const STRIPE = new Stripe(process.env.STRIPE_API_KEY as string);
 const FRONTEND_URL = process.env.FRONTEND_URL as string;
 const STRIPE_ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
 
+const getMyOrders = async (req:Request,res:Response)=>{
+    try {
+        const orders = await Order.find({user: req.userId}).populate("restaurant").populate("user");
+
+        res.json(orders);
+    } catch (error) {
+         console.log(error);
+        return res.status(500).json({message: "Something went wrong"});
+    }
+}
 type CheckoutSessionRequest = {
     cartItems: {
         menuItemId: string;
@@ -88,37 +98,35 @@ const createCheckoutSession = async (req: Request, res: Response) => {
     }
 };
 
-const createLineItems = (checkoutSessionRequest: CheckoutSessionRequest, menuItems: MenuItemType[]) => {
-    // 1. foreach cartItem, get the menuItem object from the restaurant
-    // (to get the price)
-    // 2. foreach cartItem, convert it to a stripe line item
-    // 3. retrun line item array
-
+const createLineItems = (
+    checkoutSessionRequest: CheckoutSessionRequest,
+    menuItems: MenuItemType[]
+  ) => {
     const lineItems = checkoutSessionRequest.cartItems.map((cartItem) => {
-        const menuItem = menuItems.find(
-            (item) => item._id.toString() === cartItem.menuItemId.toString()
-        );
-
-        if (!menuItem) {
-            throw new Error(`Menu item not found: ${cartItem.menuItemId}`)
-        }
-
-        const line_item: Stripe.Checkout.SessionCreateParams.LineItem = {
-            price_data: {
-                currency: "gbp",
-                unit_amount: menuItem.price,
-                product_data: {
-                    name: menuItem.name,
-                },
-            },
-            quantity: parseInt(cartItem.quantity),
-        };
-
-        return line_item;
+      const menuItem = menuItems.find(
+        (item) => item._id.toString() === cartItem.menuItemId.toString()
+      );
+  
+      if (!menuItem) {
+        throw new Error(`Menu item not found: ${cartItem.menuItemId}`);
+      }
+  
+      const line_item: Stripe.Checkout.SessionCreateParams.LineItem = {
+        price_data: {
+          currency: "gbp",
+          unit_amount: menuItem.price,
+          product_data: {
+            name: menuItem.name,
+          },
+        },
+        quantity: parseInt(cartItem.quantity),
+      };
+  
+      return line_item;
     });
-
+  
     return lineItems;
-};
+  };
 
 const createSession = async (
     lineItems: Stripe.Checkout.SessionCreateParams.LineItem[],
@@ -153,6 +161,7 @@ const createSession = async (
 };
 
 export default {
+    getMyOrders,
     createCheckoutSession,
     stripWebhookHandler
 }
